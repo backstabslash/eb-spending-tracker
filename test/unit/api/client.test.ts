@@ -93,20 +93,20 @@ describe("extractCounterparty", () => {
     const tx = makeTx({
       creditor: null,
       remittance_information: [
-        "OST 516737******6375 06.02.26 14:20 22.30 EUR (533626) Wolt Estonia EE",
+        "OST 400000******1234 01.01.25 12:00 10.00 EUR (100001) Coffee Shop AB",
       ],
     });
-    expect(extractCounterparty(tx)).toBe("Wolt Estonia EE");
+    expect(extractCounterparty(tx)).toBe("Coffee Shop AB");
   });
 
   it("extracts name from card-no-code pattern", () => {
     const tx = makeTx({
       creditor: null,
       remittance_information: [
-        "516737******6375 04.02.26 STROOMI KESKUSE APTEEK 10315 TALLINN",
+        "400000******1234 01.01.25 DOWNTOWN GROCERY 10001 METROPOLIS",
       ],
     });
-    expect(extractCounterparty(tx)).toBe("STROOMI KESKUSE APTEEK");
+    expect(extractCounterparty(tx)).toBe("DOWNTOWN GROCERY");
   });
 
   it("falls back to description", () => {

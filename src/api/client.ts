@@ -101,11 +101,9 @@ export function extractCounterparty(tx: RawTransaction): string {
   if (tx.credit_debit_indicator === "CRDT" && tx.debtor?.name) return tx.debtor.name;
   const desc = tx.remittance_information?.join(" ") ?? "";
 
-  // "OST 516737******6375 06.02.26 14:20 22.30 EUR (533626) Wolt Estonia EE"
   const cardWithCode = desc.match(/\(\d+\)\s+(.+)/);
   if (cardWithCode) return cardWithCode[1]!.trim();
 
-  // "516737******6375 04.02.26 STROOMI KESKUSE APTEEK 10315 TALLINN"
   const cardNoCode = desc.match(/\d{6}\*+\d{4}\s+\d{2}\.\d{2}\.\d{2}\s+(.+)/);
   if (cardNoCode) {
     return cardNoCode[1]!.replace(/\s+\d{5}\s+\w+$/, "").trim();

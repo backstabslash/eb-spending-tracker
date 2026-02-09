@@ -1,8 +1,34 @@
 # EB Spending Tracker
 
+[![CI](https://github.com/backstabslash/eb-spending-tracker/actions/workflows/deploy.yaml/badge.svg)](https://github.com/backstabslash/eb-spending-tracker/actions/workflows/deploy.yaml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 Personal spending tracker that fetches bank transactions via the [Enable Banking API](https://enablebanking.com/) (PSD2 AISP), stores them in MongoDB, and sends daily/monthly summaries to Telegram. Dashboards via Grafana.
 
 Supports multiple banks — add a new bank by updating config and running the auth flow. No code changes needed.
+
+## Architecture
+
+```mermaid
+graph LR
+    CJ[CronJob] -- triggers --> APP[App]
+    APP -- fetch transactions --> EB[Enable Banking API]
+    EB -. PSD2 .-> Banks[Bank 1, Bank 2, ...]
+    APP -- store --> DB[(MongoDB)]
+    APP -- send summaries --> TG[Telegram]
+    GF[Grafana] -- query --> DB
+
+    style EB fill:#1a73e8,color:#fff
+    style DB fill:#4db33d,color:#fff
+    style TG fill:#2aabee,color:#fff
+    style GF fill:#f46800,color:#fff
+```
+
+## Dashboard
+
+Grafana dashboard showing aggregated spending across multiple connected banks:
+
+![Grafana Dashboard](docs/dashboard.png)
 
 ## Features
 
@@ -23,33 +49,6 @@ Supports multiple banks — add a new bank by updating config and running the au
 - Grafana + MongoDB datasource plugin (optional)
 - Kubernetes (any distro), Helm, GitHub Actions, GHCR
 - HashiCorp Vault + External Secrets Operator (optional — plain k8s Secrets work too)
-
-## Project Structure
-
-```text
-src/
-  index.ts              Entry point (auth / fetch mode)
-  config.ts             Env var loading + validation
-  constants.ts          Shared constants (timeouts, limits, defaults)
-  api/
-    jwt.ts              RS256 JWT generation
-    client.ts           Enable Banking API client
-  db/
-    mongo.ts            MongoDB connection
-    collections.ts      Typed collection accessors + indexes
-  models/
-    transaction.ts      Transaction interface
-    session.ts          Session interface
-  services/
-    auth.ts             Interactive bank auth flow (CLI)
-    fetcher.ts          Fetch, dedup, store transactions
-    summarizer.ts       Daily/monthly aggregation pipelines
-    telegram.ts         Telegram message formatting + sending
-test/unit/               Unit tests (mirrors src/ structure)
-charts/spending-tracker/ Helm chart (CronJob + ExternalSecret)
-.github/workflows/       CI/CD pipeline (build+test → deploy)
-docs/setup-guide.md      Full deployment guide
-```
 
 ## Configuration
 
@@ -134,3 +133,35 @@ The Secret name must match `<release>-secrets` (e.g. `spending-secrets` for rele
 2. Add the bank entry to the `banks` secret (Vault or env var)
 3. Run `auth <bankId>` to create the session
 4. No code or Helm changes needed
+
+## Project Structure
+
+<details>
+<summary>Click to expand</summary>
+
+```text
+src/
+  index.ts              Entry point (auth / fetch mode)
+  config.ts             Env var loading + validation
+  constants.ts          Shared constants (timeouts, limits, defaults)
+  api/
+    jwt.ts              RS256 JWT generation
+    client.ts           Enable Banking API client
+  db/
+    mongo.ts            MongoDB connection
+    collections.ts      Typed collection accessors + indexes
+  models/
+    transaction.ts      Transaction interface
+    session.ts          Session interface
+  services/
+    auth.ts             Interactive bank auth flow (CLI)
+    fetcher.ts          Fetch, dedup, store transactions
+    summarizer.ts       Daily/monthly aggregation pipelines
+    telegram.ts         Telegram message formatting + sending
+test/unit/               Unit tests (mirrors src/ structure)
+charts/spending-tracker/ Helm chart (CronJob + ExternalSecret)
+.github/workflows/       CI/CD pipeline (build+test → deploy)
+docs/setup-guide.md      Full deployment guide
+```
+
+</details>
