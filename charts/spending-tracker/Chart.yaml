@@ -1,0 +1,5 @@
+apiVersion: v2
+name: spending-tracker
+description: Fetches bank transactions via Enable Banking API, stores in MongoDB, sends summaries to Telegram
+version: 0.1.0
+appVersion: "1.0.0"

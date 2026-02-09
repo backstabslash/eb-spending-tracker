@@ -1,0 +1,28 @@
+# Overridden by CI with ghcr.io/<github-username>/eb-spending-tracker
+image:
+  repository: ghcr.io/OWNER/eb-spending-tracker
+  tag: latest
+  pullPolicy: Always
+
+schedule: "0 22 * * *"
+backoffLimit: 1
+activeDeadlineSeconds: 300
+
+args: ["fetch"]
+
+externalSecret:
+  enabled: true
+  refreshInterval: 1h
+  secretStoreName: vault-backend
+  remoteKey: secret/spending-tracker
+  keys:
+    - secretKey: BANKS
+      property: banks
+    - secretKey: MONGO_URI
+      property: mongo-uri
+    - secretKey: TELEGRAM_BOT_TOKEN
+      property: telegram-bot-token
+    - secretKey: TELEGRAM_CHAT_ID
+      property: telegram-chat-id
+    - secretKey: GRAFANA_URL
+      property: grafana-url
