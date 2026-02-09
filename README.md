@@ -21,8 +21,8 @@ Supports multiple banks — add a new bank by updating config and running the au
 - MongoDB 7 (native driver)
 - Telegraf (Telegram bot)
 - Grafana + MongoDB datasource plugin (optional)
-- k3s, Helm, GitHub Actions, GHCR
-- HashiCorp Vault + External Secrets Operator
+- Kubernetes (any distro), Helm, GitHub Actions, GHCR
+- HashiCorp Vault + External Secrets Operator (optional — plain k8s Secrets work too)
 
 ## Project Structure
 
@@ -102,9 +102,27 @@ npm run format:check
 
 ## Deployment
 
-See [docs/setup-guide.md](docs/setup-guide.md) for full deployment instructions (k3s, Helm, Vault, GitHub Actions).
+See [docs/setup-guide.md](docs/setup-guide.md) for full deployment instructions.
 
-The GitHub Actions workflow builds and pushes a Docker image to GHCR, then deploys via `helm upgrade`. The Helm chart runs a CronJob that executes `fetch` on schedule.
+The GitHub Actions workflow builds and pushes a Docker image to GHCR, then deploys via `helm upgrade`. The Helm chart runs a CronJob that executes `fetch` on schedule. Works on any Kubernetes cluster.
+
+### Secrets
+
+The Helm chart supports two approaches:
+
+**Vault + ESO** (default) — set `externalSecret.enabled: true` in `values.yaml` and configure the Vault path. ESO syncs secrets to a k8s Secret automatically.
+
+**Plain k8s Secret** — set `externalSecret.enabled: false` and create the Secret manually:
+
+```bash
+kubectl -n <namespace> create secret generic <release>-secrets \
+  --from-literal=BANKS='[{"id":"...","name":"...","country":"...","appId":"...","privateKey":"..."}]' \
+  --from-literal=MONGO_URI='mongodb://...' \
+  --from-literal=TELEGRAM_BOT_TOKEN='...' \
+  --from-literal=TELEGRAM_CHAT_ID='...'
+```
+
+The Secret name must match `<release>-secrets` (e.g. `spending-secrets` for release name `spending`).
 
 ## Adding a New Bank
 
