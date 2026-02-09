@@ -53,7 +53,7 @@ export async function createSession(code: string, bank: BankConfig): Promise<Ses
   return request<SessionResponse>("POST", "/sessions", bank, { code });
 }
 
-interface RawTransaction {
+export interface RawTransaction {
   entry_reference: string | null;
   transaction_amount: { amount: string; currency: string };
   credit_debit_indicator: "DBIT" | "CRDT";
@@ -86,13 +86,13 @@ export interface FetchedTransaction {
   status: string;
 }
 
-function hashTransaction(tx: RawTransaction): string {
+export function hashTransaction(tx: RawTransaction): string {
   const desc = tx.remittance_information?.join(" ") ?? "";
   const key = `${tx.value_date ?? tx.booking_date}|${tx.transaction_amount.amount}|${tx.transaction_amount.currency}|${tx.credit_debit_indicator}|${desc}`;
   return createHash("sha256").update(key).digest("hex").slice(0, 24);
 }
 
-function extractCounterparty(tx: RawTransaction): string {
+export function extractCounterparty(tx: RawTransaction): string {
   if (tx.credit_debit_indicator === "DBIT" && tx.creditor?.name) return tx.creditor.name;
   if (tx.credit_debit_indicator === "CRDT" && tx.debtor?.name) return tx.debtor.name;
   const desc = tx.remittance_information?.join(" ") ?? "";
