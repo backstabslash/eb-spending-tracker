@@ -3,6 +3,7 @@ import { stdin, stdout } from "node:process";
 import { startAuth, createSession } from "../api/client.js";
 import { sessions } from "../db/collections.js";
 import { config, type BankConfig } from "../config.js";
+import { EB_SESSION_VALIDITY_MS } from "../constants.js";
 import type { Session } from "../models/session.js";
 
 export async function runAuthFlow(bankId: string): Promise<void> {
@@ -28,16 +29,18 @@ export async function runAuthFlow(bankId: string): Promise<void> {
     console.log("Creating session...");
     const session = await createSession(code, bank);
 
-    const account = session.accounts[0];
-    if (!account) throw new Error("No accounts returned from session");
+    if (session.accounts.length === 0) throw new Error("No accounts returned from session");
 
-    console.log(`Session created. Account: ${account.iban} (uid: ${account.uid})`);
+    for (const acc of session.accounts) {
+      console.log(`  Account: ${acc.iban} (uid: ${acc.uid})`);
+    }
+    console.log(`Session created with ${session.accounts.length} account(s).`);
 
     const doc: Session = {
       _id: bankId,
       sessionId: session.session_id,
-      accountUid: account.uid,
-      validUntil: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString(),
+      accounts: session.accounts.map((a) => ({ uid: a.uid, iban: a.iban })),
+      validUntil: new Date(Date.now() + EB_SESSION_VALIDITY_MS).toISOString(),
     };
 
     await sessions().replaceOne({ _id: bankId }, doc, { upsert: true });

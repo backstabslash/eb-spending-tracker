@@ -1,3 +1,5 @@
+import { DEFAULT_REDIRECT_URL } from "./constants.js";
+
 export interface BankConfig {
   id: string;
   name: string;
@@ -13,7 +15,6 @@ function required(name: string): string {
   return value;
 }
 
-const DEFAULT_REDIRECT_URL = "https://localhost:3000/callback";
 
 function parseBanks(raw: string): BankConfig[] {
   const parsed: unknown[] = JSON.parse(raw);
@@ -23,7 +24,8 @@ function parseBanks(raw: string): BankConfig[] {
   return parsed.map((b) => {
     const bank = b as Record<string, unknown>;
     if (!bank.id || !bank.name || !bank.country || !bank.appId || !bank.privateKey) {
-      throw new Error(`Bank config missing required fields: ${JSON.stringify(bank)}`);
+      const safe = Object.fromEntries(Object.entries(bank).filter(([k]) => k !== "privateKey"));
+      throw new Error(`Bank config missing required fields: ${JSON.stringify(safe)}`);
     }
     return {
       id: bank.id as string,

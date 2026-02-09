@@ -1,8 +1,12 @@
 import { createHash } from "node:crypto";
 import { generateJwt } from "./jwt.js";
 import type { BankConfig } from "../config.js";
-
-const BASE_URL = "https://api.enablebanking.com";
+import {
+  EB_API_BASE_URL,
+  EB_REQUEST_TIMEOUT_MS,
+  EB_SESSION_VALIDITY_MS,
+  EB_MAX_PAGINATION_PAGES,
+} from "../constants.js";
 
 async function request<T>(
   method: string,
@@ -10,14 +14,14 @@ async function request<T>(
   bank: BankConfig,
   body?: unknown,
 ): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const res = await fetch(`${EB_API_BASE_URL}${path}`, {
     method,
     headers: {
       Authorization: `Bearer ${generateJwt(bank.appId, bank.privateKey)}`,
       "Content-Type": "application/json",
     },
     body: body ? JSON.stringify(body) : undefined,
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(EB_REQUEST_TIMEOUT_MS),
   });
 
   if (!res.ok) {
@@ -35,7 +39,7 @@ interface AuthResponse {
 export async function startAuth(redirectUrl: string, bank: BankConfig): Promise<AuthResponse> {
   return request<AuthResponse>("POST", "/auth", bank, {
     access: {
-      valid_until: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString(),
+      valid_until: new Date(Date.now() + EB_SESSION_VALIDITY_MS).toISOString(),
     },
     aspsp: { name: bank.name, country: bank.country },
     state: "auth",
@@ -116,10 +120,16 @@ export async function fetchTransactions(
   dateTo: string,
   bank: BankConfig,
 ): Promise<FetchedTransaction[]> {
+  const MAX_PAGES = EB_MAX_PAGINATION_PAGES;
   const all: FetchedTransaction[] = [];
   let continuationKey: string | undefined;
+  let page = 0;
 
   do {
+    if (++page > MAX_PAGES) {
+      console.warn(`Pagination limit (${MAX_PAGES}) reached for account ${accountUid}, stopping.`);
+      break;
+    }
     const params = new URLSearchParams({ date_from: dateFrom, date_to: dateTo });
     if (continuationKey) params.set("continuation_key", continuationKey);
 
@@ -130,12 +140,19 @@ export async function fetchTransactions(
     );
 
     for (const tx of data.transactions) {
+      const rawDate = tx.value_date ?? tx.booking_date;
+      const date = rawDate ? new Date(rawDate) : null;
+      if (!date || isNaN(date.getTime())) {
+        console.warn(`Skipping transaction with invalid date: ${rawDate ?? "null"}`, tx.entry_reference);
+        continue;
+      }
+
       all.push({
         hash: hashTransaction(tx),
         amount: parseFloat(tx.transaction_amount.amount),
         currency: tx.transaction_amount.currency,
         direction: tx.credit_debit_indicator,
-        date: new Date(tx.value_date ?? tx.booking_date ?? ""),
+        date,
         counterpartyName: extractCounterparty(tx),
         description: tx.remittance_information?.join(" ") ?? "",
         status: tx.status,

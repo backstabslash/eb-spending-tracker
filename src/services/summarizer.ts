@@ -1,5 +1,6 @@
 import type { Document } from "mongodb";
 import { transactions } from "../db/collections.js";
+import { SUMMARY_TOP_COUNTERPARTIES } from "../constants.js";
 
 export interface DailyTransaction {
   counterpartyName: string;
@@ -99,7 +100,7 @@ export async function getMonthlySummary(
   const totals = await aggregateTotals(monthFilter);
   if (!totals) return null;
 
-  const topCounterparties = await aggregateTopSpend({ ...monthFilter, direction: "DBIT" }, 5);
+  const topCounterparties = await aggregateTopSpend({ ...monthFilter, direction: "DBIT" }, SUMMARY_TOP_COUNTERPARTIES);
 
   const prefix = `${year}-${String(month).padStart(2, "0")}`;
   return {

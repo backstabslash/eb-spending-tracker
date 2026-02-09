@@ -27,6 +27,8 @@ spec:
               imagePullPolicy: {{ .Values.image.pullPolicy }}
               args:
                 {{- toYaml .Values.args | nindent 16 }}
+              resources:
+                {{- toYaml .Values.resources | nindent 16 }}
               envFrom:
                 - secretRef:
                     name: {{ include "spending-tracker.secretName" . }}

@@ -6,7 +6,7 @@ Supports multiple banks — add a new bank by updating config and running the au
 
 ## Features
 
-- Multi-bank transaction fetching via Enable Banking (PSD2)
+- Multi-bank, multi-account transaction fetching via Enable Banking (PSD2)
 - Automatic deduplication (content-hash-based `_id`)
 - Daily summary: yesterday's spending with individual line items
 - Monthly summary: totals + top 5 counterparties
@@ -26,10 +26,11 @@ Supports multiple banks — add a new bank by updating config and running the au
 
 ## Project Structure
 
-```
+```text
 src/
   index.ts              Entry point (auth / fetch mode)
   config.ts             Env var loading + validation
+  constants.ts          Shared constants (timeouts, limits, defaults)
   api/
     jwt.ts              RS256 JWT generation
     client.ts           Enable Banking API client
@@ -44,8 +45,9 @@ src/
     fetcher.ts          Fetch, dedup, store transactions
     summarizer.ts       Daily/monthly aggregation pipelines
     telegram.ts         Telegram message formatting + sending
+test/unit/               Unit tests (mirrors src/ structure)
 charts/spending-tracker/ Helm chart (CronJob + ExternalSecret)
-.github/workflows/       CI/CD pipeline
+.github/workflows/       CI/CD pipeline (build+test → deploy)
 docs/setup-guide.md      Full deployment guide
 ```
 
@@ -54,7 +56,7 @@ docs/setup-guide.md      Full deployment guide
 ### Required Environment Variables
 
 | Variable | Description |
-|---|---|
+| --- | --- |
 | `BANKS` | JSON array of bank configs (see below) |
 | `MONGO_URI` | MongoDB connection string |
 | `TELEGRAM_BOT_TOKEN` | Telegram bot token from @BotFather |
@@ -63,7 +65,7 @@ docs/setup-guide.md      Full deployment guide
 ### Optional Environment Variables
 
 | Variable | Default | Description |
-|---|---|---|
+| --- | --- | --- |
 | `GRAFANA_URL` | _(none)_ | Full Grafana dashboard URL — if set, summary messages include a dashboard link |
 | `MONGO_DB_NAME` | `spending` | MongoDB database name |
 
@@ -97,6 +99,8 @@ Two modes:
 npm install
 npm run build
 npm run lint
+npm test
+npm run test:coverage
 npm run format:check
 ```
 

@@ -16,9 +16,11 @@ k3s comes with Traefik built-in. Configure a `traefik-config.yaml` for automatic
 1. Message `@BotFather` → `/newbot` → save the **bot token**
 2. Add the bot to your chat
 3. Send any message in the chat, then:
-   ```
+
+   ```text
    https://api.telegram.org/bot<TOKEN>/getUpdates
    ```
+
    Find `"chat":{"id": ...}` → that's your **chat ID**
 
 ## Vault secrets
@@ -39,6 +41,7 @@ All secrets are stored in HashiCorp Vault (path is configurable in the Helm char
 ```
 
 Other Vault properties:
+
 - `mongo-uri` — MongoDB connection string
 - `telegram-bot-token` — from BotFather
 - `telegram-chat-id` — from getUpdates
@@ -50,7 +53,7 @@ ESO syncs these to a k8s Secret in your namespace.
 Repo → Settings → Secrets and variables → Actions:
 
 | Secret | Description |
-|---|---|
+| --- | --- |
 | `KUBECONFIG_DATA` | Base64-encoded kubeconfig for your k3s cluster |
 
 Bank credentials and other app secrets are managed in Vault, not GHA secrets.
@@ -104,6 +107,7 @@ You should see `[BankName] Fetched X transactions, Y new` per bank, and a daily 
 ## Grafana datasource
 
 In Grafana UI → Connections → Add datasource → MongoDB:
+
 - **Connection string scheme**: `mongodb`
 - **Host**: your MongoDB service address (e.g. `mongodb.<namespace>.svc`)
 - **Port**: `27017`

@@ -178,4 +178,17 @@ describe("fetchTransactions", () => {
       fetchTransactions("acc-uid", "2025-06-01", "2025-06-15", mockBank),
     ).rejects.toThrow("failed (401)");
   });
+
+  it("skips transactions with invalid dates", async () => {
+    const validTx = makeTx({ creditor: { name: "Shop" } });
+    const invalidTx = makeTx({ value_date: null, booking_date: null });
+
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ transactions: [validTx, invalidTx] }), { status: 200 }),
+    );
+
+    const result = await fetchTransactions("acc-uid", "2025-06-01", "2025-06-15", mockBank);
+    expect(result).toHaveLength(1);
+    expect(result[0]!.counterpartyName).toBe("Shop");
+  });
 });

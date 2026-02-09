@@ -1,10 +1,8 @@
 import { fetchTransactions } from "../api/client.js";
 import { sessions, transactions } from "../db/collections.js";
 import { config, type BankConfig } from "../config.js";
+import { FETCH_MAX_LOOKBACK_DAYS, FETCH_OVERLAP_DAYS } from "../constants.js";
 import type { Transaction } from "../models/transaction.js";
-
-const MAX_LOOKBACK_DAYS = 365;
-const OVERLAP_DAYS = 7;
 
 async function getDateFrom(bankId: string): Promise<string> {
   const latest = await transactions()
@@ -15,11 +13,11 @@ async function getDateFrom(bankId: string): Promise<string> {
 
   if (latest.length > 0 && latest[0]) {
     const from = new Date(latest[0].date);
-    from.setUTCDate(from.getUTCDate() - OVERLAP_DAYS);
+    from.setUTCDate(from.getUTCDate() - FETCH_OVERLAP_DAYS);
     return from.toISOString().split("T")[0]!;
   }
 
-  return new Date(Date.now() - MAX_LOOKBACK_DAYS * 24 * 60 * 60 * 1000)
+  return new Date(Date.now() - FETCH_MAX_LOOKBACK_DAYS * 24 * 60 * 60 * 1000)
     .toISOString()
     .split("T")[0]!;
 }
@@ -36,39 +34,50 @@ async function fetchBank(bank: BankConfig): Promise<{ fetched: number; newCount:
     return { fetched: 0, newCount: 0 };
   }
 
-  const dateTo = new Date().toISOString().split("T")[0]!;
-  const dateFrom = await getDateFrom(bank.id);
-
-  console.log(`[${bank.name}] Fetching transactions from ${dateFrom} to ${dateTo}...`);
-  const raw = await fetchTransactions(session.accountUid, dateFrom, dateTo, bank);
-
-  let newCount = 0;
-  for (const tx of raw) {
-    const doc: Transaction = {
-      _id: tx.hash,
-      amount: tx.amount,
-      currency: tx.currency,
-      direction: tx.direction,
-      date: tx.date,
-      counterpartyName: tx.counterpartyName,
-      description: tx.description,
-      status: tx.status,
-      source: bank.id,
-    };
-
-    try {
-      await transactions().insertOne(doc);
-      newCount++;
-    } catch (err: unknown) {
-      if (err instanceof Error && "code" in err && (err as { code: number }).code === 11000) {
-        continue;
-      }
-      throw err;
-    }
+  const accountUids = session.accounts.map((a) => a.uid);
+  if (accountUids.length === 0) {
+    console.warn(`[${bank.name}] No accounts in session. Run 'auth ${bank.id}'.`);
+    return { fetched: 0, newCount: 0 };
   }
 
-  console.log(`[${bank.name}] Fetched ${raw.length} transactions, ${newCount} new.`);
-  return { fetched: raw.length, newCount };
+  const dateTo = new Date().toISOString().split("T")[0]!;
+  const dateFrom = await getDateFrom(bank.id);
+  let totalFetched = 0;
+  let totalNew = 0;
+
+  for (const accountUid of accountUids) {
+    console.log(`[${bank.name}] Fetching transactions for account ${accountUid} from ${dateFrom} to ${dateTo}...`);
+    const raw = await fetchTransactions(accountUid, dateFrom, dateTo, bank);
+
+    for (const tx of raw) {
+      const doc: Transaction = {
+        _id: tx.hash,
+        amount: tx.amount,
+        currency: tx.currency,
+        direction: tx.direction,
+        date: tx.date,
+        counterpartyName: tx.counterpartyName,
+        description: tx.description,
+        status: tx.status,
+        source: bank.id,
+      };
+
+      try {
+        await transactions().insertOne(doc);
+        totalNew++;
+      } catch (err: unknown) {
+        if (err instanceof Error && "code" in err && (err as { code: number }).code === 11000) {
+          continue;
+        }
+        throw err;
+      }
+    }
+
+    totalFetched += raw.length;
+  }
+
+  console.log(`[${bank.name}] Fetched ${totalFetched} transactions across ${accountUids.length} account(s), ${totalNew} new.`);
+  return { fetched: totalFetched, newCount: totalNew };
 }
 
 export async function fetchAndStore(): Promise<void> {

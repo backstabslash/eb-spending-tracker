@@ -16,14 +16,16 @@ Personal spending tracker: fetches bank transactions via Enable Banking API (sup
 ## Key Patterns
 
 - Multi-bank: banks configured via `BANKS` env var (JSON array with id, name, country, appId, privateKey, optional redirectUrl)
+- Multi-account: each bank session stores all account UIDs; fetcher iterates over all accounts
 - Two modes: `auth <bankId>` (interactive BankID/Smart-ID CLI flow) and `fetch` (cron — pull transactions from all banks + send summaries)
 - Dedup: `_id` = hash of transaction fields, skip on MongoDB duplicate key error (11000)
-- Session: one doc per bank `_id: '<bankId>'` with upsert, valid for 180 days
+- Session: one doc per bank `_id: '<bankId>'` with upsert, stores all accounts, valid for 180 days
 - Transactions tagged with `source` field (bank ID) for per-bank filtering
 - Smart fetch: fetches from 7 days before latest stored transaction (or 365 days if no history)
 - JWT: RS256 with `kid` = app ID, 1hr TTL, per-bank credentials
 - Daily summary: yesterday's DBIT transactions with individual line items
 - Monthly summary: 1st of month, spent + received totals, top 5 counterparties
+- Constants: shared values (timeouts, session validity, fetch windows) centralized in `src/constants.ts`
 
 ## Environment Variables
 
@@ -93,6 +95,9 @@ kubectl run eb-auth --rm -it --restart=Never -n <namespace> \
 ## Commands
 
 - `npm run build` — compile TypeScript
+- `npm test` — run unit tests (Vitest)
+- `npm run test:watch` — run tests in watch mode
+- `npm run test:coverage` — run tests with coverage report
 - `npm run lint` / `npm run lint:fix` — ESLint
 - `npm run format` / `npm run format:check` — Prettier
 
