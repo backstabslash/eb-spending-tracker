@@ -26,6 +26,14 @@ vi.mock("../../../src/config.js", () => ({
 
 const { sendDailySummary, sendMonthlySummary } = await import("../../../src/services/telegram.js");
 
+function lastMessage(): string {
+  return mockSendMessage.mock.calls[0][1] as string;
+}
+
+function lastOptions(): Record<string, unknown> {
+  return mockSendMessage.mock.calls[0][2] as Record<string, unknown>;
+}
+
 describe("sendDailySummary", () => {
   beforeEach(() => {
     mockSendMessage.mockReset();
@@ -46,7 +54,7 @@ describe("sendDailySummary", () => {
     await sendDailySummary(dailySummary);
 
     expect(mockSendMessage).toHaveBeenCalledOnce();
-    const msg = mockSendMessage.mock.calls[0]![1] as string;
+    const msg = lastMessage();
     expect(msg).toContain("15.06.2025");
     expect(msg).toContain("45.50 EUR");
     expect(msg).toContain("Wolt");
@@ -59,23 +67,18 @@ describe("sendDailySummary", () => {
     mockConfig.grafanaUrl = "https://grafana.example/d/abc";
     await sendDailySummary(dailySummary);
 
-    const msg = mockSendMessage.mock.calls[0]![1] as string;
-    expect(msg).toContain("https://grafana.example/d/abc");
-    expect(msg).toContain("Dashboard");
+    expect(lastMessage()).toContain("https://grafana.example/d/abc");
+    expect(lastMessage()).toContain("Dashboard");
   });
 
   it("omits Grafana link when grafanaUrl is empty", async () => {
     await sendDailySummary(dailySummary);
-
-    const msg = mockSendMessage.mock.calls[0]![1] as string;
-    expect(msg).not.toContain("Dashboard");
+    expect(lastMessage()).not.toContain("Dashboard");
   });
 
   it("uses HTML parse_mode", async () => {
     await sendDailySummary(dailySummary);
-
-    const options = mockSendMessage.mock.calls[0]![2] as Record<string, unknown>;
-    expect(options.parse_mode).toBe("HTML");
+    expect(lastOptions().parse_mode).toBe("HTML");
   });
 });
 
@@ -100,7 +103,7 @@ describe("sendMonthlySummary", () => {
     await sendMonthlySummary(monthlySummary);
 
     expect(mockSendMessage).toHaveBeenCalledOnce();
-    const msg = mockSendMessage.mock.calls[0]![1] as string;
+    const msg = lastMessage();
     expect(msg).toContain("2025-06");
     expect(msg).toContain("1200.00 EUR");
     expect(msg).toContain("3000.00 EUR");
@@ -113,22 +116,17 @@ describe("sendMonthlySummary", () => {
     mockConfig.grafanaUrl = "https://grafana.example/d/abc";
     await sendMonthlySummary(monthlySummary);
 
-    const msg = mockSendMessage.mock.calls[0]![1] as string;
-    expect(msg).toContain("https://grafana.example/d/abc");
-    expect(msg).toContain("Grafana");
+    expect(lastMessage()).toContain("https://grafana.example/d/abc");
+    expect(lastMessage()).toContain("Grafana");
   });
 
   it("omits Grafana link when grafanaUrl is empty", async () => {
     await sendMonthlySummary(monthlySummary);
-
-    const msg = mockSendMessage.mock.calls[0]![1] as string;
-    expect(msg).not.toContain("Grafana");
+    expect(lastMessage()).not.toContain("Grafana");
   });
 
   it("omits Top spending section when counterparties array is empty", async () => {
     await sendMonthlySummary({ ...monthlySummary, topCounterparties: [] });
-
-    const msg = mockSendMessage.mock.calls[0]![1] as string;
-    expect(msg).not.toContain("Top spending");
+    expect(lastMessage()).not.toContain("Top spending");
   });
 });

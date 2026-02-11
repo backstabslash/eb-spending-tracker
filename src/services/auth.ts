@@ -24,12 +24,16 @@ export async function runAuthFlow(bankId: string): Promise<void> {
     const callbackUrl = await rl.question("Paste the full redirect URL after auth: ");
     const url = new URL(callbackUrl.trim());
     const code = url.searchParams.get("code");
-    if (!code) throw new Error("No 'code' parameter found in redirect URL");
+    if (!code) {
+      throw new Error("No 'code' parameter found in redirect URL");
+    }
 
     console.log("Creating session...");
     const session = await createSession(code, bank);
 
-    if (session.accounts.length === 0) throw new Error("No accounts returned from session");
+    if (session.accounts.length === 0) {
+      throw new Error("No accounts returned from session");
+    }
 
     for (const acc of session.accounts) {
       console.log(`  Account: ${acc.iban} (uid: ${acc.uid})`);

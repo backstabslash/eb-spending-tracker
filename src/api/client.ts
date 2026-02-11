@@ -86,27 +86,50 @@ export interface FetchedTransaction {
   direction: "DBIT" | "CRDT";
   date: Date;
   counterpartyName: string;
+  counterpartyAccount: string | null;
   description: string;
   status: string;
+  entryReference: string | null;
+  merchantCategoryCode: string | null;
 }
 
+/**
+ * Dedup hash for transactions. Uses entry_reference (bank's immutable TX ID) when
+ * available; falls back to whitespace-normalized description for banks that don't
+ * provide it. See: https://enablebanking.com/docs/api/reference/ (Transaction schema)
+ */
 export function hashTransaction(tx: RawTransaction): string {
-  const desc = tx.remittance_information?.join(" ") ?? "";
-  const key = `${tx.value_date ?? tx.booking_date}|${tx.transaction_amount.amount}|${tx.transaction_amount.currency}|${tx.credit_debit_indicator}|${desc}`;
-  return createHash("sha256").update(key).digest("hex").slice(0, 24);
+  const date = tx.value_date ?? tx.booking_date ?? "";
+  const { amount, currency } = tx.transaction_amount;
+  const base = `${date}|${amount}|${currency}|${tx.credit_debit_indicator}`;
+  if (tx.entry_reference) {
+    return sha256(`${base}|ref:${tx.entry_reference}`);
+  }
+  const desc = (tx.remittance_information?.join(" ") ?? "").replace(/\s+/g, " ").trim();
+  return sha256(`${base}|${desc}`);
+}
+
+function sha256(input: string): string {
+  return createHash("sha256").update(input).digest("hex").slice(0, 24);
 }
 
 export function extractCounterparty(tx: RawTransaction): string {
-  if (tx.credit_debit_indicator === "DBIT" && tx.creditor?.name) return tx.creditor.name;
-  if (tx.credit_debit_indicator === "CRDT" && tx.debtor?.name) return tx.debtor.name;
+  if (tx.credit_debit_indicator === "DBIT" && tx.creditor?.name) {
+    return tx.creditor.name;
+  }
+  if (tx.credit_debit_indicator === "CRDT" && tx.debtor?.name) {
+    return tx.debtor.name;
+  }
   const desc = tx.remittance_information?.join(" ") ?? "";
 
   const cardWithCode = desc.match(/\(\d+\)\s+(.+)/);
-  if (cardWithCode) return cardWithCode[1]!.trim();
+  if (cardWithCode) {
+    return cardWithCode[1].trim();
+  }
 
   const cardNoCode = desc.match(/\d{6}\*+\d{4}\s+\d{2}\.\d{2}\.\d{2}\s+(.+)/);
   if (cardNoCode) {
-    return cardNoCode[1]!.replace(/\s+\d{5}\s+\w+$/, "").trim();
+    return cardNoCode[1].replace(/\s+\d{5}\s+\w+$/, "").trim();
   }
 
   return desc || "Unknown";
@@ -128,8 +151,14 @@ export async function fetchTransactions(
       console.warn(`Pagination limit (${MAX_PAGES}) reached for account ${accountUid}, stopping.`);
       break;
     }
-    const params = new URLSearchParams({ date_from: dateFrom, date_to: dateTo });
-    if (continuationKey) params.set("continuation_key", continuationKey);
+    const params = new URLSearchParams({
+      date_from: dateFrom,
+      date_to: dateTo,
+      transaction_status: "BOOK",
+    });
+    if (continuationKey) {
+      params.set("continuation_key", continuationKey);
+    }
 
     const data = await request<TransactionsResponse>(
       "GET",
@@ -137,13 +166,37 @@ export async function fetchTransactions(
       bank,
     );
 
+    const knownKeys = new Set(["transactions", "continuation_key"]);
+    const extra = Object.fromEntries(
+      Object.entries(data as unknown as Record<string, unknown>).filter(([k]) => !knownKeys.has(k)),
+    );
+    console.log(
+      `[page ${page}] ${data.transactions.length} transactions, continuation: ${data.continuation_key ? "yes" : "no"}`,
+    );
+    if (Object.keys(extra).length > 0) {
+      console.log(`[page ${page}] extra fields:`, JSON.stringify(extra));
+    }
+
+    if (data.transactions.length === 0 && data.continuation_key) {
+      console.warn(`Empty page with continuation key, stopping pagination early.`);
+      break;
+    }
+
     for (const tx of data.transactions) {
       const rawDate = tx.value_date ?? tx.booking_date;
       const date = rawDate ? new Date(rawDate) : null;
       if (!date || isNaN(date.getTime())) {
-        console.warn(`Skipping transaction with invalid date: ${rawDate ?? "null"}`, tx.entry_reference);
+        console.warn(
+          `Skipping transaction with invalid date: ${rawDate ?? "null"}`,
+          tx.entry_reference,
+        );
         continue;
       }
+
+      const counterpartyAccount =
+        tx.credit_debit_indicator === "DBIT"
+          ? (tx.creditor_account?.iban ?? null)
+          : (tx.debtor_account?.iban ?? null);
 
       all.push({
         hash: hashTransaction(tx),
@@ -152,8 +205,11 @@ export async function fetchTransactions(
         direction: tx.credit_debit_indicator,
         date,
         counterpartyName: extractCounterparty(tx),
+        counterpartyAccount,
         description: tx.remittance_information?.join(" ") ?? "",
         status: tx.status,
+        entryReference: tx.entry_reference,
+        merchantCategoryCode: tx.merchant_category_code,
       });
     }
 

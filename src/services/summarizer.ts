@@ -26,7 +26,7 @@ export interface MonthlySummary {
 interface Totals {
   totalSpent: number;
   totalReceived: number;
-  currency: string;
+  currency: string | null;
 }
 
 // prettier-ignore
@@ -68,7 +68,9 @@ export async function getDailySummary(date: Date): Promise<DailySummary | null> 
   const dateFilter = { date: { $gte: date, $lt: nextDay }, direction: "DBIT" as const };
 
   const totals = await aggregateTotals(dateFilter);
-  if (!totals) return null;
+  if (!totals) {
+    return null;
+  }
 
   const txDocs = await transactions()
     .find(dateFilter)
@@ -98,9 +100,14 @@ export async function getMonthlySummary(
   const monthFilter = { date: { $gte: start, $lt: end } };
 
   const totals = await aggregateTotals(monthFilter);
-  if (!totals) return null;
+  if (!totals) {
+    return null;
+  }
 
-  const topCounterparties = await aggregateTopSpend({ ...monthFilter, direction: "DBIT" }, SUMMARY_TOP_COUNTERPARTIES);
+  const topCounterparties = await aggregateTopSpend(
+    { ...monthFilter, direction: "DBIT" },
+    SUMMARY_TOP_COUNTERPARTIES,
+  );
 
   const prefix = `${year}-${String(month).padStart(2, "0")}`;
   return {

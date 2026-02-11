@@ -26,7 +26,7 @@ describe("generateJwt", () => {
 
   it("has correct header with alg RS256 and kid matching appId", () => {
     const token = generateJwt("my-app", pemPrivate);
-    const header = JSON.parse(Buffer.from(token.split(".")[0]!, "base64url").toString());
+    const header = JSON.parse(Buffer.from(token.split(".")[0], "base64url").toString());
 
     expect(header.alg).toBe("RS256");
     expect(header.kid).toBe("my-app");
@@ -35,7 +35,7 @@ describe("generateJwt", () => {
 
   it("has correct payload claims with frozen time", () => {
     const token = generateJwt("my-app", pemPrivate);
-    const payload = JSON.parse(Buffer.from(token.split(".")[1]!, "base64url").toString());
+    const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString());
     const expectedIat = Math.floor(new Date("2025-06-15T12:00:00Z").getTime() / 1000);
 
     expect(payload.iss).toBe("enablebanking.com");
@@ -48,7 +48,7 @@ describe("generateJwt", () => {
     const token = generateJwt("my-app", pemPrivate);
     const [headerB64, payloadB64, signatureB64] = token.split(".");
     const data = `${headerB64}.${payloadB64}`;
-    const signature = Buffer.from(signatureB64!, "base64url");
+    const signature = Buffer.from(signatureB64, "base64url");
 
     const isValid = verify("sha256", Buffer.from(data), pemPublic, signature);
     expect(isValid).toBe(true);

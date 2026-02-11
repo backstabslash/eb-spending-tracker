@@ -9,7 +9,7 @@ function formatAmount(amount: number, currency: string): string {
 }
 
 function formatDaily(s: DailySummary): string {
-  const dateStr = s.date.toISOString().split("T")[0]!;
+  const dateStr = s.date.toISOString().split("T")[0];
   const [y, m, d] = dateStr.split("-");
 
   let msg = `<b>🗓 Daily Summary — ${d}.${m}.${y}\n\n💸 Spent: ${formatAmount(s.totalSpent, s.currency)}</b>\n`;

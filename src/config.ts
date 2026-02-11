@@ -11,13 +11,14 @@ export interface BankConfig {
 
 function required(name: string): string {
   const value = process.env[name];
-  if (!value) throw new Error(`Missing required env var: ${name}`);
+  if (!value) {
+    throw new Error(`Missing required env var: ${name}`);
+  }
   return value;
 }
 
-
 function parseBanks(raw: string): BankConfig[] {
-  const parsed: unknown[] = JSON.parse(raw);
+  const parsed: unknown = JSON.parse(raw);
   if (!Array.isArray(parsed) || parsed.length === 0) {
     throw new Error("BANKS env var must be a non-empty JSON array");
   }

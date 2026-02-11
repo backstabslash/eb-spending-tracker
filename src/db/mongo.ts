@@ -19,6 +19,8 @@ export async function disconnect(): Promise<void> {
 }
 
 export function getDb() {
-  if (!client) throw new Error("MongoDB not connected");
+  if (!client) {
+    throw new Error("MongoDB not connected");
+  }
   return client.db(config.mongoDbName);
 }

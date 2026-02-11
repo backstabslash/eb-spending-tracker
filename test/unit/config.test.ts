@@ -1,12 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { TEST_BANK } from "../fixtures.js";
 
 const VALID_BANK = {
-  id: "test-bank",
-  name: "Test Bank",
-  country: "EE",
-  appId: "app-123",
-  privateKey: "-----BEGIN RSA PRIVATE KEY-----\ntest\n-----END RSA PRIVATE KEY-----",
+  id: TEST_BANK.id,
+  name: TEST_BANK.name,
+  country: TEST_BANK.country,
+  appId: TEST_BANK.appId,
+  privateKey: TEST_BANK.privateKey,
 };
+
+const ENV_KEYS = ["BANKS", "MONGO_URI", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "GRAFANA_URL", "MONGO_DB_NAME"];
 
 function setRequiredEnv(overrides: Record<string, string> = {}) {
   const defaults: Record<string, string> = {
@@ -19,12 +22,9 @@ function setRequiredEnv(overrides: Record<string, string> = {}) {
 }
 
 function clearEnv() {
-  delete process.env.BANKS;
-  delete process.env.MONGO_URI;
-  delete process.env.TELEGRAM_BOT_TOKEN;
-  delete process.env.TELEGRAM_CHAT_ID;
-  delete process.env.GRAFANA_URL;
-  delete process.env.MONGO_DB_NAME;
+  for (const key of ENV_KEYS) {
+    delete process.env[key];
+  }
 }
 
 async function loadConfig() {
@@ -63,7 +63,7 @@ describe("config", () => {
     });
     const config = await loadConfig();
 
-    expect(config.banks[0]!.redirectUrl).toBe("https://custom.example/cb");
+    expect(config.banks[0].redirectUrl).toBe("https://custom.example/cb");
     expect(config.mongoDbName).toBe("custom-db");
     expect(config.grafanaUrl).toBe("https://grafana.example/d/abc");
   });
@@ -77,7 +77,7 @@ describe("config", () => {
     const config = await loadConfig();
 
     expect(config.banks).toHaveLength(2);
-    expect(config.banks[1]!.id).toBe("second-bank");
+    expect(config.banks[1].id).toBe("second-bank");
   });
 
   it.each(["BANKS", "MONGO_URI", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"])(

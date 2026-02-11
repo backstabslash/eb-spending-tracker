@@ -5,7 +5,10 @@ export interface Transaction {
   direction: "DBIT" | "CRDT";
   date: Date;
   counterpartyName: string;
+  counterpartyAccount: string | null;
   description: string;
   status: string;
   source: string;
+  entryReference: string | null;
+  merchantCategoryCode: string | null;
 }
