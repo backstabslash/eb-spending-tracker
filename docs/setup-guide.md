@@ -72,37 +72,12 @@ GitHub profile → Packages → `eb-spending-tracker` → Package settings → C
 
 Alternatively, configure `imagePullSecrets` in the Helm chart to use a private registry.
 
-## Auth flow (per bank, re-run every ~180 days)
-
-Link a bank account via Smart-ID/BankID. The redirect URL must match what's registered in your Enable Banking app.
-
-```bash
-kubectl run eb-auth --rm -it --restart=Never -n <namespace> \
-  --image=ghcr.io/<your-github-username>/eb-spending-tracker:latest \
-  --overrides='{"spec":{"containers":[{"name":"eb-auth","image":"ghcr.io/<your-github-username>/eb-spending-tracker:latest","args":["auth","<bank-id>"],"stdin":true,"tty":true,"envFrom":[{"secretRef":{"name":"<your-secret-name>"}}]}]}}' \
-  -- auth <bank-id>
-```
-
-1. Open the printed URL in your browser
-2. Confirm with Smart-ID/BankID on your phone
-3. Browser redirects to your callback URL — page won't load, that's fine
-4. Copy the full URL from the address bar and paste it into the terminal
-
-### Adding a new bank
+## Adding a new bank
 
 1. Register a new app in Enable Banking, get app ID and PEM key
 2. Add the bank entry to the `banks` JSON in Vault
-3. Run `auth <bankId>` to create the session
+3. Run the auth flow (see [Operations](#operations)) to create the session
 4. No code or Helm changes needed
-
-## Verify
-
-```bash
-kubectl -n <namespace> create job --from=cronjob/<cronjob-name> test-fetch
-kubectl -n <namespace> logs -f job/test-fetch
-```
-
-You should see `[BankName] Fetched X transactions, Y new` per bank, and a daily summary in your Telegram chat.
 
 ## Grafana datasource
 
@@ -119,29 +94,60 @@ In Grafana UI → Connections → Add datasource → MongoDB:
 
 Set `GRAFANA_URL` env var to your dashboard URL to include links in Telegram summaries.
 
-## Useful kubectl commands
+## Operations
+
+### Manual fetch
+
+Trigger the regular fetch (same as the nightly cron):
 
 ```bash
-# Check pod status
-kubectl -n <namespace> get pods
-
-# View fetch job logs
-kubectl -n <namespace> logs -f job/<job-name>
-
-# Trigger a manual fetch
-kubectl -n <namespace> create job --from=cronjob/<cronjob-name> manual-fetch
-kubectl -n <namespace> logs -f job/manual-fetch
-
-# MongoDB shell
-echo '<query>' | kubectl -n <db-namespace> exec -i deployment/mongodb -- mongosh "mongodb://<user>:<password>@localhost:27017/<db-name>?authSource=admin"
-
-# View CronJob schedule and history
-kubectl -n <namespace> get cronjobs
-kubectl -n <namespace> get jobs
-
-# Delete completed/failed jobs
-kubectl -n <namespace> delete jobs --field-selector status.successful=1
-
-# Check secrets (base64 decoded)
-kubectl -n <namespace> get secret <secret-name> -o jsonpath='{.data.BANKS}' | base64 -d
+kubectl -n spending create job --from=cronjob/spending-spending-tracker manual-fetch
+kubectl -n spending logs -f job/manual-fetch
 ```
+
+### Manual fetch with full lookback
+
+Fetch the maximum transaction history (365 days, auto-capped if the bank limits it). This runs automatically every Monday, but you can trigger it manually:
+
+```bash
+kubectl run eb-full-fetch --rm -it --restart=Never -n spending \
+  --image=ghcr.io/backstabslash/eb-spending-tracker:<tag> \
+  --overrides='{
+  "spec": {
+    "containers": [{
+      "name": "eb-full-fetch",
+      "image": "ghcr.io/backstabslash/eb-spending-tracker:<tag>",
+      "args": ["fetch", "--full"],
+      "envFrom": [{"secretRef": {"name": "spending-secrets"}}]
+    }]
+  }
+}'
+```
+
+Replace `<tag>` with the deployed commit SHA or `latest`.
+
+### Re-authorize a bank
+
+Bank sessions expire every ~180 days. When you see `ASPSP_ERROR`, re-auth the specific bank:
+
+```bash
+kubectl run eb-auth --rm -it --restart=Never -n spending \
+  --image=ghcr.io/backstabslash/eb-spending-tracker:<tag> \
+  --overrides='{
+  "spec": {
+    "containers": [{
+      "name": "eb-auth",
+      "image": "ghcr.io/backstabslash/eb-spending-tracker:<tag>",
+      "args": ["auth", "<bank-id>"],
+      "envFrom": [{"secretRef": {"name": "spending-secrets"}}],
+      "stdin": true,
+      "tty": true
+    }]
+  }
+}'
+```
+
+1. Open the printed URL in your browser
+2. Confirm with Smart-ID/BankID on your phone
+3. Browser redirects to your callback URL — page won't load, that's fine
+4. Copy the full URL from the address bar and paste it into the terminal

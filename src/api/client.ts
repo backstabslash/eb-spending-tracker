@@ -13,12 +13,14 @@ async function request<T>(
   path: string,
   bank: BankConfig,
   body?: unknown,
+  extraHeaders?: Record<string, string>,
 ): Promise<T> {
   const res = await fetch(`${EB_API_BASE_URL}${path}`, {
     method,
     headers: {
       Authorization: `Bearer ${generateJwt(bank.appId, bank.privateKey)}`,
       "Content-Type": "application/json",
+      ...extraHeaders,
     },
     body: body ? JSON.stringify(body) : undefined,
     signal: AbortSignal.timeout(EB_REQUEST_TIMEOUT_MS),
@@ -160,10 +162,17 @@ export async function fetchTransactions(
       params.set("continuation_key", continuationKey);
     }
 
+    const psuHeaders: Record<string, string> = {
+      "Psu-Ip-Address": "127.0.0.1",
+      "Psu-User-Agent": "eb-spending-tracker/1.0",
+    };
+
     const data = await request<TransactionsResponse>(
       "GET",
       `/accounts/${accountUid}/transactions?${params}`,
       bank,
+      undefined,
+      psuHeaders,
     );
 
     const knownKeys = new Set(["transactions", "continuation_key"]);
@@ -175,11 +184,6 @@ export async function fetchTransactions(
     );
     if (Object.keys(extra).length > 0) {
       console.log(`[page ${page}] extra fields:`, JSON.stringify(extra));
-    }
-
-    if (data.transactions.length === 0 && data.continuation_key) {
-      console.warn(`Empty page with continuation key, stopping pagination early.`);
-      break;
     }
 
     for (const tx of data.transactions) {

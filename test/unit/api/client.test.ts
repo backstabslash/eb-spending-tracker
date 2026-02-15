@@ -181,6 +181,36 @@ describe("fetchTransactions", () => {
     ).rejects.toThrow("failed (401)");
   });
 
+  it("sends PSU headers with transaction requests", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ transactions: [] }), { status: 200 }),
+    );
+
+    await fetchTransactions("acc-uid", "2025-06-01", "2025-06-15", TEST_BANK);
+
+    const headers = vi.mocked(fetch).mock.calls[0][1]?.headers as Record<string, string>;
+    expect(headers["Psu-Ip-Address"]).toBe("127.0.0.1");
+    expect(headers["Psu-User-Agent"]).toBe("eb-spending-tracker/1.0");
+  });
+
+  it("continues polling on empty pages with continuation_key", async () => {
+    const tx = makeRawTx();
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ transactions: [], continuation_key: "wait1" }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ transactions: [tx] }), { status: 200 }),
+      );
+
+    const result = await fetchTransactions("acc-uid", "2025-06-01", "2025-06-15", TEST_BANK);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(result).toHaveLength(1);
+  });
+
   it("skips transactions with invalid dates", async () => {
     const validTx = makeRawTx({ creditor: { name: "Shop" } });
     const invalidTx = makeRawTx({ value_date: null, booking_date: null });

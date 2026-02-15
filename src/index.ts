@@ -26,24 +26,26 @@ async function main(): Promise<void> {
   }
 
   if (mode === "fetch") {
+    const isMonday = new Date().getUTCDay() === 1;
+    const fullLookback = process.argv.includes("--full") || isMonday;
+
     await connect();
     await ensureIndexes();
     try {
-      await fetchAndStore();
+      await fetchAndStore(fullLookback);
 
-      const summaryDate = new Date();
-      summaryDate.setUTCHours(0, 0, 0, 0);
+      const today = new Date();
+      today.setUTCHours(0, 0, 0, 0);
 
-      const daily = await getDailySummary(summaryDate);
+      const daily = await getDailySummary(today);
       if (daily) {
         await sendDailySummary(daily);
         console.log("Daily summary sent to Telegram.");
       }
 
-      const today = new Date();
-      if (today.getDate() === 1) {
+      if (today.getUTCDate() === 1) {
         const lastMonth = new Date(today);
-        lastMonth.setMonth(lastMonth.getMonth() - 1);
+        lastMonth.setUTCMonth(lastMonth.getUTCMonth() - 1);
         const monthly = await getMonthlySummary(lastMonth.getFullYear(), lastMonth.getMonth() + 1);
         if (monthly) {
           await sendMonthlySummary(monthly);
@@ -56,7 +58,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  console.error("Usage: node dist/index.js <auth <bankId> | fetch>");
+  console.error("Usage: node dist/index.js <auth <bankId> | fetch [--full]>");
   process.exit(1);
 }
 

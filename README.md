@@ -37,7 +37,8 @@ Grafana dashboard showing aggregated spending across multiple connected banks:
 - Daily summary: yesterday's spending with individual line items
 - Monthly summary: totals + top 5 counterparties
 - Telegram notifications with optional Grafana dashboard links
-- Smart fetch window: 7 days overlap (365 days on first run)
+- Smart fetch window: 7 days overlap (365 days on first run, auto-capped per bank)
+- Weekly full lookback (Mondays) + manual `fetch --full` option
 - Per-bank session management with 180-day validity
 
 ## Stack
@@ -91,6 +92,9 @@ Two modes:
 
 - **`auth <bankId>`** — interactive CLI flow to link a bank account via BankID/Smart-ID (re-run every ~180 days)
 - **`fetch`** — pull transactions from all banks, store in MongoDB, send Telegram summaries (designed for cron)
+- **`fetch --full`** — same as `fetch` but uses the maximum lookback window (365 days) instead of the last known transaction date. Runs automatically on Mondays.
+
+See [docs/setup-guide.md](docs/setup-guide.md) for kubectl commands to run these in-cluster.
 
 ## Development
 
