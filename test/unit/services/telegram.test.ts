@@ -104,11 +104,11 @@ describe("sendMonthlySummary", () => {
 
     expect(mockSendMessage).toHaveBeenCalledOnce();
     const msg = lastMessage();
-    expect(msg).toContain("2025-06");
+    expect(msg).toContain("06.2025");
     expect(msg).toContain("1200.00 EUR");
     expect(msg).toContain("3000.00 EUR");
     expect(msg).toContain("Wolt");
-    expect(msg).toContain("350.00 EUR");
+    expect(msg).toContain("-350.00 EUR");
     expect(msg).toContain("Rimi");
   });
 
@@ -117,12 +117,12 @@ describe("sendMonthlySummary", () => {
     await sendMonthlySummary(monthlySummary);
 
     expect(lastMessage()).toContain("https://grafana.example/d/abc");
-    expect(lastMessage()).toContain("Grafana");
+    expect(lastMessage()).toContain("Dashboard");
   });
 
   it("omits Grafana link when grafanaUrl is empty", async () => {
     await sendMonthlySummary(monthlySummary);
-    expect(lastMessage()).not.toContain("Grafana");
+    expect(lastMessage()).not.toContain("Dashboard");
   });
 
   it("omits Top spending section when counterparties array is empty", async () => {

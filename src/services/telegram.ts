@@ -29,19 +29,23 @@ function formatDaily(s: DailySummary): string {
 }
 
 function formatMonthly(s: MonthlySummary): string {
-  let msg = `🗓 <b>Monthly Summary — ${s.month}</b>\n\n`;
-  msg += `💸 Spent: <b>${formatAmount(s.totalSpent, s.currency)}</b>\n`;
-  msg += `💰 Received: <b>${formatAmount(s.totalReceived, s.currency)}</b>\n`;
+  const [yearStr, monthStr] = s.month.split("-");
+  const monthStart = new Date(Date.UTC(Number(yearStr), Number(monthStr) - 1, 1));
+  const monthEnd = new Date(Date.UTC(Number(yearStr), Number(monthStr), 1));
+
+  let msg = `<b>🗓 Monthly Summary — ${monthStr}.${yearStr}\n\n`;
+  msg += `💸 Spent: ${formatAmount(s.totalSpent, s.currency)}\n`;
+  msg += `💰 Received: ${formatAmount(s.totalReceived, s.currency)}</b>\n`;
 
   if (s.topCounterparties.length > 0) {
     msg += `\n🏪 Top spending:\n`;
     for (const cp of s.topCounterparties) {
-      msg += `• ${cp.name}: ${formatAmount(cp.total, s.currency)}\n`;
+      msg += `• ${cp.name}: -${formatAmount(cp.total, s.currency)}\n`;
     }
   }
 
   if (config.grafanaUrl) {
-    msg += `\n<a href="${config.grafanaUrl}&from=now-30d&to=now">📈 Grafana</a>`;
+    msg += `\n📊 <a href="${config.grafanaUrl}&from=${monthStart.getTime()}&to=${monthEnd.getTime()}">Dashboard</a>`;
   }
 
   return msg;
