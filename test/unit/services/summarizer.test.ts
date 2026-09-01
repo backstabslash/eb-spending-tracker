@@ -14,9 +14,7 @@ vi.mock("../../../src/db/collections.js", () => ({
   }),
 }));
 
-const { getDailySummary, getMonthlySummary } = await import(
-  "../../../src/services/summarizer.js"
-);
+const { getDailySummary, getMonthlySummary } = await import("../../../src/services/summarizer.js");
 
 function lastAggregateMatch(): Document {
   return mockAggregate.mock.calls[0][0][0].$match;
@@ -37,7 +35,7 @@ describe("getDailySummary", () => {
 
   it("returns summary with transactions for the given day", async () => {
     mockToArray
-      .mockResolvedValueOnce([{ totalSpent: 55.0, totalReceived: 0, currency: "EUR" }])
+      .mockResolvedValueOnce([{ currency: "EUR", spent: 55.0, received: 0 }])
       .mockResolvedValueOnce([
         { counterpartyName: "Wolt", amount: 30, currency: "EUR" },
         { counterpartyName: "Bolt", amount: 25, currency: "EUR" },
@@ -48,8 +46,7 @@ describe("getDailySummary", () => {
 
     expect(result).toEqual({
       date,
-      totalSpent: 55.0,
-      currency: "EUR",
+      totals: [{ currency: "EUR", spent: 55.0, received: 0 }],
       transactions: [
         { counterpartyName: "Wolt", amount: 30, currency: "EUR" },
         { counterpartyName: "Bolt", amount: 25, currency: "EUR" },
@@ -69,14 +66,29 @@ describe("getDailySummary", () => {
     expect(match.date.$lt).toEqual(new Date("2025-06-16T00:00:00Z"));
   });
 
-  it("defaults currency to EUR when null", async () => {
+  it("keeps one total per currency", async () => {
     mockToArray
-      .mockResolvedValueOnce([{ totalSpent: 10, totalReceived: 0, currency: null }])
+      .mockResolvedValueOnce([
+        { currency: "EUR", spent: 55.0, received: 0 },
+        { currency: "SEK", spent: 300.0, received: 0 },
+      ])
       .mockResolvedValueOnce([]);
 
     const result = await getDailySummary(new Date("2025-06-15T00:00:00Z"));
 
-    expect(result?.currency).toBe("EUR");
+    expect(result?.totals).toEqual([
+      { currency: "EUR", spent: 55.0, received: 0 },
+      { currency: "SEK", spent: 300.0, received: 0 },
+    ]);
+  });
+
+  it("groups totals by currency rather than collapsing them", async () => {
+    mockToArray.mockResolvedValueOnce([]);
+
+    await getDailySummary(new Date("2025-06-15T00:00:00Z"));
+
+    const groupStage = mockAggregate.mock.calls[0][0][1].$group as { _id: Document };
+    expect(groupStage._id).toEqual({ $ifNull: ["$currency", "EUR"] });
   });
 });
 
@@ -95,22 +107,20 @@ describe("getMonthlySummary", () => {
 
   it("returns monthly totals with top counterparties", async () => {
     mockToArray
-      .mockResolvedValueOnce([{ totalSpent: 1200, totalReceived: 3000, currency: "EUR" }])
+      .mockResolvedValueOnce([{ currency: "EUR", spent: 1200, received: 3000 }])
       .mockResolvedValueOnce([
-        { name: "Wolt", total: 350 },
-        { name: "Rimi", total: 280 },
+        { name: "Wolt", currency: "EUR", total: 350 },
+        { name: "Rimi", currency: "EUR", total: 280 },
       ]);
 
     const result = await getMonthlySummary(2025, 6);
 
     expect(result).toEqual({
       month: "2025-06",
-      totalSpent: 1200,
-      totalReceived: 3000,
-      currency: "EUR",
+      totals: [{ currency: "EUR", spent: 1200, received: 3000 }],
       topCounterparties: [
-        { name: "Wolt", total: 350 },
-        { name: "Rimi", total: 280 },
+        { name: "Wolt", currency: "EUR", total: 350 },
+        { name: "Rimi", currency: "EUR", total: 280 },
       ],
     });
   });
@@ -127,7 +137,7 @@ describe("getMonthlySummary", () => {
 
   it("zero-pads single-digit months", async () => {
     mockToArray
-      .mockResolvedValueOnce([{ totalSpent: 0, totalReceived: 0, currency: "EUR" }])
+      .mockResolvedValueOnce([{ currency: "EUR", spent: 0, received: 0 }])
       .mockResolvedValueOnce([]);
 
     const result = await getMonthlySummary(2025, 3);

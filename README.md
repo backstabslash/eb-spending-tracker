@@ -40,6 +40,7 @@ Grafana dashboard showing aggregated spending across multiple connected banks:
 - Smart fetch window: 7 days overlap (365 days on first run, auto-capped per bank)
 - Weekly full lookback (Mondays) + manual `fetch --full` option
 - Per-bank session management with 180-day validity
+- Telegram alert when a bank session is expired or expires within 14 days
 
 ## Stack
 

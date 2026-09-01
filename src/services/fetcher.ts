@@ -1,8 +1,20 @@
 import { fetchTransactions } from "../api/client.js";
 import { sessions, transactions } from "../db/collections.js";
 import { config, type BankConfig } from "../config.js";
-import { FETCH_MAX_LOOKBACK_DAYS, FETCH_OVERLAP_DAYS } from "../constants.js";
+import {
+  FETCH_MAX_LOOKBACK_DAYS,
+  FETCH_OVERLAP_DAYS,
+  MS_PER_DAY,
+  SESSION_EXPIRY_WARNING_DAYS,
+} from "../constants.js";
 import type { Transaction } from "../models/transaction.js";
+
+export interface SessionAlert {
+  bankId: string;
+  bankName: string;
+  status: "missing" | "expired" | "expiring";
+  daysLeft: number;
+}
 
 function parseTransactionPeriodError(err: unknown): string | null {
   if (!(err instanceof Error)) {
@@ -42,21 +54,36 @@ async function fetchBank(
   bank: BankConfig,
   fullLookback: boolean,
   dateTo: string,
+  alerts: SessionAlert[],
 ): Promise<{ fetched: number; newCount: number }> {
+  const pushAlert = (status: SessionAlert["status"], daysLeft: number): void => {
+    alerts.push({ bankId: bank.id, bankName: bank.name, status, daysLeft });
+  };
+
   const session = await sessions().findOne({ _id: bank.id });
   if (!session) {
     console.warn(`No session for ${bank.name} (${bank.id}). Run 'auth ${bank.id}' first.`);
+    pushAlert("missing", 0);
     return { fetched: 0, newCount: 0 };
   }
 
-  if (new Date(session.validUntil) < new Date()) {
+  const msLeft = new Date(session.validUntil).getTime() - Date.now();
+  if (msLeft <= 0) {
     console.warn(`Session expired for ${bank.name} (${bank.id}). Run 'auth ${bank.id}'.`);
+    pushAlert("expired", 0);
     return { fetched: 0, newCount: 0 };
+  }
+
+  const daysLeft = Math.ceil(msLeft / MS_PER_DAY);
+  if (daysLeft <= SESSION_EXPIRY_WARNING_DAYS) {
+    console.warn(`Session for ${bank.name} (${bank.id}) expires in ${daysLeft} day(s).`);
+    pushAlert("expiring", daysLeft);
   }
 
   const accountUids = session.accounts.map((a) => a.uid);
   if (accountUids.length === 0) {
     console.warn(`[${bank.name}] No accounts in session. Run 'auth ${bank.id}'.`);
+    pushAlert("missing", 0);
     return { fetched: 0, newCount: 0 };
   }
 
@@ -118,7 +145,10 @@ async function fetchBank(
   return { fetched: totalFetched, newCount: totalNew };
 }
 
-export async function fetchAndStore(fullLookback = false): Promise<void> {
+export async function fetchAndStore(
+  fullLookback = false,
+  alerts: SessionAlert[] = [],
+): Promise<SessionAlert[]> {
   if (fullLookback) {
     console.log("Full lookback enabled, fetching max history.");
   }
@@ -128,7 +158,7 @@ export async function fetchAndStore(fullLookback = false): Promise<void> {
 
   for (const bank of config.banks) {
     try {
-      await fetchBank(bank, fullLookback, dateTo);
+      await fetchBank(bank, fullLookback, dateTo, alerts);
     } catch (err: unknown) {
       console.error(`[${bank.name}] Failed to fetch:`, err);
       errors.push({ bank: bank.name, error: err });
@@ -138,4 +168,6 @@ export async function fetchAndStore(fullLookback = false): Promise<void> {
   if (errors.length === config.banks.length) {
     throw new Error(`All banks failed to fetch: ${errors.map((e) => e.bank).join(", ")}`);
   }
+
+  return alerts;
 }

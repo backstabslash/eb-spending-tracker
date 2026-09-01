@@ -1,7 +1,10 @@
+export const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
 export const EB_API_BASE_URL = "https://api.enablebanking.com";
 export const EB_REQUEST_TIMEOUT_MS = 30_000;
-export const EB_SESSION_VALIDITY_MS = 180 * 24 * 60 * 60 * 1000;
+export const EB_SESSION_VALIDITY_MS = 180 * MS_PER_DAY;
 export const EB_MAX_PAGINATION_PAGES = 100;
+export const SESSION_EXPIRY_WARNING_DAYS = 14;
 
 export const DEFAULT_REDIRECT_URL = "https://localhost:3000/callback";
 

@@ -20,6 +20,7 @@ Personal spending tracker: fetches bank transactions via Enable Banking API (sup
 - Two modes: `auth <bankId>` (interactive BankID/Smart-ID CLI flow) and `fetch` (cron — pull transactions from all banks + send summaries)
 - Dedup: `_id` = hash of transaction fields, skip on MongoDB duplicate key error (11000)
 - Session: one doc per bank `_id: '<bankId>'` with upsert, stores all accounts, valid for 180 days
+- Session alerts: each fetch run sends a Telegram warning when a bank session is missing, expired, or expires within `SESSION_EXPIRY_WARNING_DAYS` (14)
 - Transactions tagged with `source` field (bank ID) for per-bank filtering
 - Smart fetch: fetches from 7 days before latest stored transaction (or 365 days if no history)
 - JWT: RS256 with `kid` = app ID, 1hr TTL, per-bank credentials
@@ -39,7 +40,7 @@ Optional:
 ## Infrastructure
 
 - App is deployed as a Helm chart (`charts/spending-tracker/`)
-- CronJob runs at `0 22 * * *` (10 PM UTC) with `fetch` arg
+- CronJob runs at `0 4 * * *` (4 AM UTC) with `fetch` arg — early enough that the UTC day it summarizes is also the previous local day anywhere from UTC+0 to UTC+3
 - Secrets come from Vault via ESO → k8s Secret in the app namespace
 - All infra (Vault, ESO, MongoDB, Grafana, Traefik) managed in a separate infra repo
 - GHCR package must be set to public (or configure `imagePullSecrets`)

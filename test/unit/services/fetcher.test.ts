@@ -37,6 +37,7 @@ vi.mock("../../../src/config.js", () => ({
 }));
 
 const { fetchAndStore } = await import("../../../src/services/fetcher.js");
+type SessionAlert = Awaited<ReturnType<typeof fetchAndStore>>[number];
 
 describe("fetchAndStore", () => {
   beforeEach(() => {
@@ -197,5 +198,128 @@ describe("fetchAndStore", () => {
     expect(mockFetchTransactions).toHaveBeenCalledTimes(2);
     expect(mockFetchTransactions.mock.calls[0][0]).toBe("acc1");
     expect(mockFetchTransactions.mock.calls[1][0]).toBe("acc2");
+  });
+});
+
+describe("session alerts", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockConfig.banks = [{ ...defaultBank }];
+  });
+
+  it("reports a missing session", async () => {
+    mockFindOne.mockResolvedValueOnce(null);
+
+    const alerts = await fetchAndStore();
+
+    expect(alerts).toEqual([
+      { bankId: "test-bank", bankName: "Test Bank", status: "missing", daysLeft: 0 },
+    ]);
+  });
+
+  it("reports an expired session", async () => {
+    mockFindOne.mockResolvedValueOnce(
+      makeSession({ validUntil: new Date(Date.now() - 1000).toISOString() }),
+    );
+
+    const alerts = await fetchAndStore();
+
+    expect(alerts).toEqual([
+      { bankId: "test-bank", bankName: "Test Bank", status: "expired", daysLeft: 0 },
+    ]);
+  });
+
+  it("warns about a session expiring soon but still fetches", async () => {
+    mockFindOne.mockResolvedValueOnce(
+      makeSession({ validUntil: new Date(Date.now() + 3 * 86_400_000).toISOString() }),
+    );
+    mockToArray.mockResolvedValueOnce([]);
+    mockFetchTransactions.mockResolvedValueOnce([]);
+
+    const alerts = await fetchAndStore();
+
+    expect(alerts).toEqual([
+      { bankId: "test-bank", bankName: "Test Bank", status: "expiring", daysLeft: 3 },
+    ]);
+    expect(mockFetchTransactions).toHaveBeenCalledOnce();
+  });
+
+  it("stays quiet when the session is comfortably valid", async () => {
+    mockFindOne.mockResolvedValueOnce(
+      makeSession({ validUntil: new Date(Date.now() + 90 * 86_400_000).toISOString() }),
+    );
+    mockToArray.mockResolvedValueOnce([]);
+    mockFetchTransactions.mockResolvedValueOnce([]);
+
+    const alerts = await fetchAndStore();
+
+    expect(alerts).toEqual([]);
+  });
+
+  it("reports each bank separately", async () => {
+    mockConfig.banks = [
+      { id: "bank-a", name: "Bank A", country: "EE", appId: "a", privateKey: "k", redirectUrl: "" },
+      { id: "bank-b", name: "Bank B", country: "EE", appId: "b", privateKey: "k", redirectUrl: "" },
+    ];
+    mockFindOne
+      .mockResolvedValueOnce(makeSession({ validUntil: new Date(Date.now() - 1000).toISOString() }))
+      .mockResolvedValueOnce(
+        makeSession({ validUntil: new Date(Date.now() + 86_400_000).toISOString() }),
+      );
+    mockToArray.mockResolvedValue([]);
+    mockFetchTransactions.mockResolvedValueOnce([]);
+
+    const alerts = await fetchAndStore();
+
+    expect(alerts.map((a) => [a.bankId, a.status, a.daysLeft])).toEqual([
+      ["bank-a", "expired", 0],
+      ["bank-b", "expiring", 1],
+    ]);
+  });
+});
+
+describe("session alerts on fetch failure", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockConfig.banks = [{ ...defaultBank }];
+  });
+
+  it("keeps the alert when that bank's fetch throws", async () => {
+    mockConfig.banks = [
+      { id: "bank-a", name: "Bank A", country: "EE", appId: "a", privateKey: "k", redirectUrl: "" },
+      { id: "bank-b", name: "Bank B", country: "EE", appId: "b", privateKey: "k", redirectUrl: "" },
+    ];
+    mockFindOne
+      .mockResolvedValueOnce(
+        makeSession({ validUntil: new Date(Date.now() + 3 * 86_400_000).toISOString() }),
+      )
+      .mockResolvedValueOnce(
+        makeSession({ validUntil: new Date(Date.now() + 90 * 86_400_000).toISOString() }),
+      );
+    mockToArray.mockResolvedValue([]);
+    mockFetchTransactions
+      .mockRejectedValueOnce(new Error("upstream boom"))
+      .mockResolvedValueOnce([]);
+
+    const alerts = await fetchAndStore();
+
+    expect(alerts).toEqual([
+      { bankId: "bank-a", bankName: "Bank A", status: "expiring", daysLeft: 3 },
+    ]);
+  });
+
+  it("keeps alerts when every bank fails", async () => {
+    mockFindOne.mockResolvedValueOnce(
+      makeSession({ validUntil: new Date(Date.now() + 3 * 86_400_000).toISOString() }),
+    );
+    mockToArray.mockResolvedValue([]);
+    mockFetchTransactions.mockRejectedValueOnce(new Error("upstream boom"));
+
+    const alerts: SessionAlert[] = [];
+    await expect(fetchAndStore(false, alerts)).rejects.toThrow("All banks failed to fetch");
+
+    expect(alerts).toEqual([
+      { bankId: "test-bank", bankName: "Test Bank", status: "expiring", daysLeft: 3 },
+    ]);
   });
 });

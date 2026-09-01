@@ -11,7 +11,7 @@ resources:
   limits:
     memory: 256Mi
 
-schedule: "0 22 * * *"
+schedule: "0 4 * * *"
 backoffLimit: 1
 activeDeadlineSeconds: 300
 

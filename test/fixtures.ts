@@ -53,7 +53,7 @@ export function makeSession(
   return {
     _id: "test-bank",
     accounts: [{ uid: "acc1", iban: "EE123" }],
-    validUntil: new Date(Date.now() + 86_400_000).toISOString(),
+    validUntil: new Date(Date.now() + 90 * 86_400_000).toISOString(),
     ...overrides,
   };
 }

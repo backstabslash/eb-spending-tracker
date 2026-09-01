@@ -8,57 +8,65 @@ export interface DailyTransaction {
   currency: string;
 }
 
+export interface CurrencyTotal {
+  currency: string;
+  spent: number;
+  received: number;
+}
+
 export interface DailySummary {
   date: Date;
-  totalSpent: number;
-  currency: string;
+  totals: CurrencyTotal[];
   transactions: DailyTransaction[];
+}
+
+export interface TopCounterparty {
+  name: string;
+  currency: string;
+  total: number;
 }
 
 export interface MonthlySummary {
   month: string;
-  totalSpent: number;
-  totalReceived: number;
-  currency: string;
-  topCounterparties: Array<{ name: string; total: number }>;
+  totals: CurrencyTotal[];
+  topCounterparties: TopCounterparty[];
 }
 
-interface Totals {
-  totalSpent: number;
-  totalReceived: number;
-  currency: string | null;
-}
-
+// Grouped by currency: summing across currencies would produce a plausible-looking wrong total.
 // prettier-ignore
-const spendGroup = {
-  _id: null,
-  totalSpent: { $sum: { $cond: [{ $eq: ["$direction", "DBIT"] }, "$amount", 0] } },
-  totalReceived: { $sum: { $cond: [{ $eq: ["$direction", "CRDT"] }, "$amount", 0] } },
-  currency: { $first: "$currency" },
-};
+const totalsStages: Document[] = [
+  { $group: {
+      _id: { $ifNull: ["$currency", "EUR"] },
+      spent: { $sum: { $cond: [{ $eq: ["$direction", "DBIT"] }, "$amount", 0] } },
+      received: { $sum: { $cond: [{ $eq: ["$direction", "CRDT"] }, "$amount", 0] } },
+  } },
+  { $sort: { spent: -1, received: -1 } },
+  { $project: { _id: 0, currency: "$_id", spent: 1, received: 1 } },
+];
 
 function topSpendStages(limit: number): Document[] {
   return [
-    { $group: { _id: "$counterpartyName", total: { $sum: "$amount" } } },
+    {
+      $group: {
+        _id: { name: "$counterpartyName", currency: "$currency" },
+        total: { $sum: "$amount" },
+      },
+    },
     { $sort: { total: -1 } },
     { $limit: limit },
-    { $project: { _id: 0, name: "$_id", total: 1 } },
+    { $project: { _id: 0, name: "$_id.name", currency: "$_id.currency", total: 1 } },
   ];
 }
 
-async function aggregateTotals(matchFilter: Document): Promise<Totals | undefined> {
-  const [result] = await transactions()
-    .aggregate<Totals>([{ $match: matchFilter }, { $group: spendGroup }])
+async function aggregateTotals(matchFilter: Document): Promise<CurrencyTotal[]> {
+  return transactions()
+    .aggregate<CurrencyTotal>([{ $match: matchFilter }, ...totalsStages])
     .toArray();
-  return result;
 }
 
-async function aggregateTopSpend(
-  matchFilter: Document,
-  limit: number,
-): Promise<Array<{ name: string; total: number }>> {
+async function aggregateTopSpend(matchFilter: Document, limit: number): Promise<TopCounterparty[]> {
   return transactions()
-    .aggregate<{ name: string; total: number }>([{ $match: matchFilter }, ...topSpendStages(limit)])
+    .aggregate<TopCounterparty>([{ $match: matchFilter }, ...topSpendStages(limit)])
     .toArray();
 }
 
@@ -68,7 +76,7 @@ export async function getDailySummary(date: Date): Promise<DailySummary | null> 
   const dateFilter = { date: { $gte: date, $lt: nextDay }, direction: "DBIT" as const };
 
   const totals = await aggregateTotals(dateFilter);
-  if (!totals) {
+  if (totals.length === 0) {
     return null;
   }
 
@@ -83,12 +91,7 @@ export async function getDailySummary(date: Date): Promise<DailySummary | null> 
     })
     .toArray();
 
-  return {
-    date,
-    totalSpent: totals.totalSpent,
-    currency: totals.currency ?? "EUR",
-    transactions: txDocs,
-  };
+  return { date, totals, transactions: txDocs };
 }
 
 export async function getMonthlySummary(
@@ -100,7 +103,7 @@ export async function getMonthlySummary(
   const monthFilter = { date: { $gte: start, $lt: end } };
 
   const totals = await aggregateTotals(monthFilter);
-  if (!totals) {
+  if (totals.length === 0) {
     return null;
   }
 
@@ -110,11 +113,5 @@ export async function getMonthlySummary(
   );
 
   const prefix = `${year}-${String(month).padStart(2, "0")}`;
-  return {
-    month: prefix,
-    totalSpent: totals.totalSpent,
-    totalReceived: totals.totalReceived,
-    currency: totals.currency ?? "EUR",
-    topCounterparties,
-  };
+  return { month: prefix, totals, topCounterparties };
 }

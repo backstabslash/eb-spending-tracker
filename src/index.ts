@@ -1,9 +1,9 @@
 import { connect, disconnect } from "./db/mongo.js";
 import { ensureIndexes } from "./db/collections.js";
 import { runAuthFlow } from "./services/auth.js";
-import { fetchAndStore } from "./services/fetcher.js";
+import { fetchAndStore, type SessionAlert } from "./services/fetcher.js";
 import { getDailySummary, getMonthlySummary } from "./services/summarizer.js";
-import { sendDailySummary, sendMonthlySummary } from "./services/telegram.js";
+import { sendDailySummary, sendMonthlySummary, sendSessionAlert } from "./services/telegram.js";
 
 async function main(): Promise<void> {
   const mode = process.argv[2];
@@ -31,13 +31,22 @@ async function main(): Promise<void> {
 
     await connect();
     await ensureIndexes();
+    const alerts: SessionAlert[] = [];
     try {
-      await fetchAndStore(fullLookback);
+      try {
+        await fetchAndStore(fullLookback, alerts);
+      } finally {
+        await sendSessionAlert(alerts).catch((err: unknown) => {
+          console.error("Failed to send session alert:", err);
+        });
+      }
 
       const today = new Date();
       today.setUTCHours(0, 0, 0, 0);
+      const yesterday = new Date(today);
+      yesterday.setUTCDate(yesterday.getUTCDate() - 1);
 
-      const daily = await getDailySummary(today);
+      const daily = await getDailySummary(yesterday);
       if (daily) {
         await sendDailySummary(daily);
         console.log("Daily summary sent to Telegram.");
